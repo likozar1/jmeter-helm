@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jmeter-slaves
+  labels:
+    jmeter_mode: slave
+spec:
+  ttlSecondsAfterFinished: 60
+  backoffLimit: 0
+  parallelism: {{ .Values.slave.replicaCount }}
+  template:
+    metadata:
+      labels:
+        jmeter_mode: slave
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: jmslave
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: MODE
+              value: "SLAVE"
+          command: ["/bin/bash"]
+          args: ["-c", "trap 'exit 0' SIGUSR1 && while true; do sleep 30;done"]
+          ports:
+            - containerPort: 1099
+            - containerPort: 50000
+            - containerPort: 4445
+          livenessProbe:
+            exec:
+              command:
+              - cat
+              - /opt/jmeter/apache-jmeter/bin/jmeter
+          resources:
+            {{- toYaml .Values.resources.slave | nindent 12 }}
+      restartPolicy: Never
